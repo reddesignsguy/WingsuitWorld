@@ -16,9 +16,13 @@ local flewThruLoop = replicatedStorage.Events.FlewThruLoop
 local flewNearObstacle = replicatedStorage.Events.FlewNearObstacle
 local flewThruCheckpoint = replicatedStorage.Events.FlewThruCheckpoint
 
-local flyingPlayers = {} -- Holds data that persists within a flight run
--- Key: Player
--- Value:  Data
+--[[
+	 Holds player data for players that are currently flying
+
+     Key: Player
+     Value:  Data 
+--]]
+local flyingPlayers = {}
 
 -- States:
 local multipliers = { 1, 2, 4, 6, 8 } -- TODO: Move to a module script

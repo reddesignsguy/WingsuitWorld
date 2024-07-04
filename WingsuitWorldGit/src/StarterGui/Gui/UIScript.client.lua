@@ -5,10 +5,10 @@ local pointsModule = require(replicatedStorage:WaitForChild("PointsModule"))
 
 -- References
 local gui = script.Parent
-local pointsLabel : TextLabel = gui.Points
-local multiplierLabel : TextLabel = gui.Multiplier
-local multiplierBarFrame : Frame = gui.MultiplierBar
-local multiplierHealthFrame : Frame = gui.MultiplierHealth
+local pointsLabel: TextLabel = gui.Points
+local multiplierLabel: TextLabel = gui.Multiplier
+local multiplierBarFrame: Frame = gui.MultiplierBar
+local multiplierHealthFrame: Frame = gui.MultiplierHealth
 local vignette = gui.Vignette
 local rewardFrame = gui.RewardFrame
 
@@ -19,7 +19,7 @@ local updatedMultiplier = replicatedStorage.Events.UpdatedMultiplier
 local flewThruLoop = replicatedStorage.Events.FlewThruLoop
 local flewNearObstacle = replicatedStorage.Events.FlewNearObstacle
 local flewThruCheckpoint = replicatedStorage.Events.FlewThruCheckpoint
-
+local plrPointsChanged = replicatedStorage.Events.PlrPointsChanged
 
 -- Vignette
 local age = 3
@@ -43,28 +43,28 @@ init()
 function drawRewards()
 	-- TODO: Put this in wider scope
 	local nextYPosition = 200
-	
+
 	for categoryName, category in pairs(rewardLabels) do
 		-- TODO: Refactor handling between categories w/ multiple tiers and those with just one
 		if categoryName == "Loop" then
-			for _, tier  in pairs(category) do
-				local frame : Frame = tier.Frame
+			for _, tier in pairs(category) do
+				local frame: Frame = tier.Frame
 				frame.Position = UDim2.new(0, 200, 0, nextYPosition)
 
-				local pointsLabel : TextLabel = frame.Points
+				local pointsLabel: TextLabel = frame.Points
 				if pointsLabel then
 					pointsLabel.Text = tostring(tier.Points)
 				end
 
 				nextYPosition += 20
 			end
-		
+
 		-- Might be a reward for proximity flying (only 1 tier)
 		elseif categoryName == "Proximity" and category.Points then
-			local frame : Frame = category.Frame
+			local frame: Frame = category.Frame
 			frame.Position = UDim2.new(0, 200, 0, nextYPosition)
 
-			local pointsLabel : TextLabel = frame.Points
+			local pointsLabel: TextLabel = frame.Points
 			if pointsLabel then
 				pointsLabel.Text = tostring(category.Points)
 			end
@@ -86,27 +86,31 @@ function drawMultiplier()
 end
 runService.Heartbeat:Connect(drawMultiplier)
 
-
 function drawPoints()
 	pointsLabel.Text = points
 end
 runService.Heartbeat:Connect(drawPoints)
 
 --=-=-=-=-=-=-=-=-=-=-=-= Remotes  -=-=-=-=-=-=-=-=-=-=-=-=-=-=
+function setPoints(newPoints)
+	print("Setting points")
+	points = newPoints
+end
+flewThruCheckpoint.OnClientEvent:Connect(setPoints)
+plrPointsChanged.OnClientEvent:Connect(setPoints)
+
 function updateVignette(dt)
 	if age <= lifetime then
-		vignette.Size = UDim2.new(0, gui.AbsoluteSize.X , 0,  gui.AbsoluteSize.Y)
-		
+		vignette.Size = UDim2.new(0, gui.AbsoluteSize.X, 0, gui.AbsoluteSize.Y)
+
 		age += dt
 	else
 		vignette.Visible = false
 	end
-	
 end
 runService.PreRender:Connect(updateVignette)
 
-
-function resetVignette(color : Color3)
+function resetVignette(color: Color3)
 	-- Reset only if the tier is higher
 	-- Reset state
 	vignette.BackgroundTransparency = 0.85
@@ -114,25 +118,18 @@ function resetVignette(color : Color3)
 	vignette.ImageColor3 = color
 	vignette.Visible = true
 	age = 0
-	
-	-- Animate
+
+	-- Animate vignette
 	local goal = {}
-	
+
 	goal.BackgroundTransparency = 1
 	goal.ImageTransparency = 1
 	local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
 
-	local tween = tweenService:Create(vignette, tweenInfo, goal)		
+	local tween = tweenService:Create(vignette, tweenInfo, goal)
 	tween:Play()
 end
 rewardedPlayer.Event:Connect(resetVignette)
-
-
-function updatePoints(newPoints)
-	points = newPoints
-end
-flewThruCheckpoint.OnClientEvent:Connect(updatePoints)
-
 
 function updateMultiplier(mult, pointsForNextMult, multPointReq)
 	multiplier = mult
@@ -141,17 +138,15 @@ function updateMultiplier(mult, pointsForNextMult, multPointReq)
 end
 updatedMultiplier.OnClientEvent:Connect(updateMultiplier)
 
-
 function addLoopReward(tier)
-	
 	-- Update existing frame
-	if rewardLabels["Loop"][tier]  then
+	if rewardLabels["Loop"][tier] then
 		rewardLabels["Loop"][tier]["Points"] += pointsModule.getTierReward(tier)
 	-- Create new frame
-	else 
+	else
 		local newFrame = rewardFrame:Clone()
 		newFrame.Parent = gui
-		
+
 		local points = pointsModule.getTierReward(tier)
 		newFrame.Points.Text = points
 
@@ -159,10 +154,8 @@ function addLoopReward(tier)
 		newFrame.Title.Text = title
 
 		newFrame.Visible = true
-		
-		local data = {Frame = newFrame,
-					  Points = points
-									}
+
+		local data = { Frame = newFrame, Points = points }
 		rewardLabels["Loop"][tier] = data
 	end
 end
@@ -170,10 +163,10 @@ flewThruLoop.OnClientEvent:Connect(addLoopReward)
 
 function addProximityReward(proximityReward)
 	-- Update existing frame
-	if rewardLabels["Proximity"]["Points"]  then
+	if rewardLabels["Proximity"]["Points"] then
 		rewardLabels["Proximity"]["Points"] += proximityReward
 		-- Create new frame
-	else 
+	else
 		local newFrame = rewardFrame:Clone()
 		newFrame.Parent = gui
 
@@ -185,9 +178,7 @@ function addProximityReward(proximityReward)
 
 		newFrame.Visible = true
 
-		local data = {Frame = newFrame,
-			Points = points
-		}
+		local data = { Frame = newFrame, Points = points }
 		rewardLabels["Proximity"] = data
 	end
 end
@@ -196,14 +187,14 @@ flewNearObstacle.OnClientEvent:Connect(addProximityReward)
 function clearRewards()
 	for categoryName, category in pairs(rewardLabels) do
 		if categoryName == "Loop" then
-			for _, tier  in pairs(category) do
+			for _, tier in pairs(category) do
 				tier.Frame:ClearAllChildren()
 				table.clear(tier)
 			end
-		else 
+		else
 			category.Frame:ClearAllChildren()
 		end
-		
+
 		table.clear(category)
 	end
 end

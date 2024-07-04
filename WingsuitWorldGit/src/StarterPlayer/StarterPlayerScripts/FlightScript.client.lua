@@ -125,7 +125,9 @@ function loop(dt: number)
 	if flightMode then
 		-- TODO: Testing optimal lateral mobility, Remove in prod
 		if lateralMobility == nil then
-			lateralMobility = plr.PlayerGui.DevGui.DevGuiFrame.LateralMobility.Value
+			-- lateralMobility = plr.PlayerGui.DevGui.DevGuiFrame.LateralMobility.Value
+			lateralMobility = Instance.new("IntValue")
+			lateralMobility.Value = 400
 		end
 
 		-- -=-=-=-=-=-=-=- Vector/Angle references -=-=-=-=-=-=-=-

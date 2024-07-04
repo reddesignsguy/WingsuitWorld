@@ -13,6 +13,7 @@ local enteredRace = replicatedStorage.Events.EnteredRace
 local flewThruLoopEvent = replicatedStorage.Events.FlewThruLoop
 local flewNearObstacle = replicatedStorage.Events.FlewNearObstacle
 local flewThruCheckpoint = replicatedStorage.Events.FlewThruCheckpoint
+local plrPointsChanged = replicatedStorage.Events.PlrPointsChanged
 
 -- Imports
 local MAX_SPEED = Constants.MAX_SPEED
@@ -43,16 +44,16 @@ local flyingPlayers: { flyingPlayer } = {}
 	@param dt  float  loop will be called every heartbeat
 --]]
 function loop(dt)
-	for plr, racingData in pairs(flyingPlayers) do
+	for plr, data: flyingPlayer in pairs(flyingPlayers) do
 		-- Update points for player
 		local obsData = getNearbyObstacleData(plr)
 		local pointsEarned = updatePoints(plr, obsData, dt)
-		racingData.PointsInProgress += pointsEarned
+		data.PointsInProgress += pointsEarned
 
 		collectNearbyCoins(plr)
 
 		-- Update racetrack
-		local racetrackData = racingData.racetrackData
+		local racetrackData = data.racetrackData
 		local index = racetrackData.nextRingIndex
 		local ring = racetrackData.Rings[index]
 		updateRacetrack(plr, ring)
@@ -131,20 +132,22 @@ end
 enteredRace.OnServerEvent:Connect(handleEnteredRace)
 
 function handleRespawn(plr, char)
+	-- Reconnect entering checkpoint detection
 	local humanoid = char.Humanoid
 	humanoid.Touched:Connect(function(otherPart)
 		handleEnteredCheckpoint(plr, otherPart)
-	end) -- Reconnect entering checkpoint detection
+	end)
 
+	local data = flyingPlayers[plr]
 	-- Reconnect collision detections to parts
 	local partCollisionConnections = setupCollisionDetection(char)
-	local connections = flyingPlayers[plr].connections
+	local connections = data.connections
 	for _, connectionOfPart in pairs(partCollisionConnections) do
 		table.insert(connections, connectionOfPart)
 	end
 
 	-- Move player to the last checkpoint
-	local racetrackData = flyingPlayers[plr].racetrackData
+	local racetrackData = data.racetrackData
 	local hrp = char.HumanoidRootPart
 	local lastRingIndex = racetrackData.nextRingIndex - 1
 	local ring = racetrackData.Rings[lastRingIndex]
@@ -156,6 +159,9 @@ function handleRespawn(plr, char)
 	-- Enable flight mode
 	enteredFlightMode:FireClient(plr) -- client
 	enteredServerFlightMode:Fire(plr) -- server
+
+	-- Update UI
+	plrPointsChanged:FireClient(plr, data["points"])
 end
 
 function handleDeath(plr)

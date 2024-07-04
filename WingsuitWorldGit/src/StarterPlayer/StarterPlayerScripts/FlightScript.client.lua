@@ -9,40 +9,32 @@ local pointsModule = require(replicatedStorage:WaitForChild("PointsModule"))
 
 -- Events
 local exitedFlightModeEvent = replicatedStorage.Events.ExitedFlightMode
-local enteredFlightModeEvent =  replicatedStorage.Events.EnteredFlightMode
-local exitedFlightModeClientEvent = replicatedStorage.ClientEvents.ExitedFlightMode
-local enteredFlightModeClientEvent =  replicatedStorage.ClientEvents.EnteredFlightMode
-local rewardedPlayerClientEvent = replicatedStorage.ClientEvents.RewardedPlayer
+local enteredFlightModeEvent = replicatedStorage.Events.EnteredFlightMode
 
 -- References
-local plr : Player = players.LocalPlayer
+local targetVelocityUnit = nil -- Used to check stalling
+local plr: Player = players.LocalPlayer
 local playerGui = plr:FindFirstChild("PlayerGui")
 local character = plr.Character or plr.CharacterAdded:Wait()
-local humanoid : Humanoid = character:WaitForChild("Humanoid")
+local humanoid: Humanoid = character:WaitForChild("Humanoid")
 local hrp = humanoid.RootPart
-local torso = character:FindFirstChild("Torso")
 local parts = {}
-local vectorVisuals = {}
+local vectorVisuals = {} -- TODO: Remove in prod
 
 --=-=-=-=-=-==-=-= Development and Parameters -=-=-=-=-=-=-=-=-=-=-=
 -- Debugging
 local showVectorVisuals = false
 local lateralMobility = nil
 
-print("reintiializing starter player script")
 -- States
---local currentStreak = 0
---local multipliers = {1,2,4,6,8}
---local multiplierIndex = 1
---local pointsForNextMultiplierRequirement = 1000 -- if pointsForNextMultiplier reaches this value, the multiplier is increased
---local pointsForNextMultiplier = 0 -- if this goes to 0, the multiplier is reduced (unless the multipler is 1)
-flightMode = false
+local flightMode = false
 local heartbeatLoop = nil
 
 -- Physics references
-local alignOrientation : AlignOrientation = nil
-local POINTS_HITBOX_RADIUS = 60
-local targetVelocityUnit = nil -- used to maintain velocity/orientation when not pressing anything
+local alignOrientation: AlignOrientation = nil
+local maintainFlight: Vector3 = nil
+local verticalWeight = 0
+-- local POINTS_HITBOX_RADIUS = 60 -- TODO: Testing the hitbox radius for earning points, Remove in prod
 local lastBodyVelocity = nil -- for calculating acceleration; used for detecting stall
 
 -- Physics parameters
@@ -50,63 +42,56 @@ local MAX_SPEED = constants.MAX_SPEED
 local GRAVITY = 70 -- 160 gravity, 0.001 air density
 local AoA = 15 -- degrees
 local liftCoefficient = 0.5
-local LIFT_BOOST = 4.5^2 -- Higher = the more maneuvarabilty, but slows down horizontal speed faster -> less transfer to vertical height momentum
---local LIFT_BASE_BOOST = 5
-local LIFT_BASE_BOOST_NEW = 3.0 -- good = 3.5
-local LIFT_MAINTENANCE_BOOST = 2.5
+local LIFT_BOOST = 4.5 ^ 2 -- Higher = the more maneuvarabilty, but slows down horizontal speed faster -> less transfer to vertical height momentum
+local LIFT_BASE_BOOST_NEW = 3.0
 local ALIGN_ORIENTATION_MAX_TORQUE = 100000
 local ALIGN_ORIENTATION_RESPONSIVENESS = 50
 local TURN_FORCE_MAGNITUDE = 2200
 local BASE_TURN_FORCE_MAGNITUDE = 3000
 local DOWN_BOOST = 500
 local BASE_DOWN_BOOST = 500
-
 local PITCH_DEGREES_OF_FREEDOM = 80 -- Controls the maximuim degrees of freedom on one side of the axis of pitch []
 
 local keysActive = {
-	[Enum.KeyCode.W]=false,
-	[Enum.KeyCode.S]=false,
-	[Enum.KeyCode.A]=false,
-	[Enum.KeyCode.D]=false
+	[Enum.KeyCode.W] = false,
+	[Enum.KeyCode.S] = false,
+	[Enum.KeyCode.A] = false,
+	[Enum.KeyCode.D] = false,
 }
 
-
-
 -- Starts the loop
-function start(notifyServer : boolean ) -- TODO: Notifying the server is only for testing respawning at the last checkpt, REMOVE IN PROD
+function start()
 	-- Reset references
 	character = plr.Character or plr.CharacterAdded:Wait()
 	humanoid = character:WaitForChild("Humanoid")
 	hrp = humanoid.RootPart
 
 	-- Teleport character to the sky
-	flightMode = true -- TODO: Remove in prod
+	flightMode = true
 	workspace.Gravity = GRAVITY
 	setupForces()
 
-	playerGui.Gui.Enabled = true 	-- set up gui
-	
-	heartbeatLoop = runService.Heartbeat:Connect(loop)
-	-- -=-=-=-=-=-=-=-=-=- DEBUGGING -=-=-=-=-=-=-=-=-=-=-=-=
-	if showVectorVisuals then
-		setupVectorVisuals()
-	end
+	playerGui.Gui.Enabled = true -- Set up gui
 
+	heartbeatLoop = runService.Heartbeat:Connect(loop)
+
+	-- TODO: =-=-=-=-=-=-=-=-=- Remove in prod (DEBUGGING) -=-=-=-=-=-=-=-=-=-=-=-=
+	-- if showVectorVisuals then
+	-- 	setupVectorVisuals()
+	-- end
 
 	-- Visualize the player's points hitbox
-	local pointsHitBox = Instance.new("Part")
-	pointsHitBox.Shape = Enum.PartType.Ball
-	pointsHitBox.Parent = hrp
-	pointsHitBox.Name = "PointsHitBox"
-	pointsHitBox.Transparency = 0.9
-	pointsHitBox.Color = Color3.new(1, 0.881743, 0.0887922)
-	pointsHitBox.Size = Vector3.new(POINTS_HITBOX_RADIUS*2, POINTS_HITBOX_RADIUS*2, POINTS_HITBOX_RADIUS*2)
-	pointsHitBox.Massless = true
-	pointsHitBox.CastShadow = false
-	pointsHitBox.CanCollide = false
-	pointsHitBox.Material = Enum.Material.SmoothPlastic
-
-
+	-- local pointsHitBox = Instance.new("Part")
+	-- pointsHitBox.Shape = Enum.PartType.Ball
+	-- pointsHitBox.Parent = hrp
+	-- pointsHitBox.Name = "PointsHitBox"
+	-- pointsHitBox.Transparency = 0.9
+	-- pointsHitBox.Color = Color3.new(1, 0.881743, 0.0887922)
+	-- pointsHitBox.Size = Vector3.new(POINTS_HITBOX_RADIUS * 2, POINTS_HITBOX_RADIUS * 2, POINTS_HITBOX_RADIUS * 2)
+	-- pointsHitBox.Massless = true
+	-- pointsHitBox.CastShadow = false
+	-- pointsHitBox.CanCollide = false
+	-- pointsHitBox.Material = Enum.Material.SmoothPlastic
 end
 enteredFlightModeEvent.OnClientEvent:Connect(start)
 
@@ -117,8 +102,7 @@ function stop(crashed)
 	-- instances
 	destroyForces()
 	destroyVectorVisuals()
-	
-	print(flightMode)
+
 	-- turn off gui
 	playerGui.Gui.Enabled = false
 end
@@ -126,42 +110,38 @@ exitedFlightModeEvent.OnClientEvent:Connect(stop)
 
 function resetState()
 	flightMode = false
-	
+
 	-- Reset physics
-	humanoid:ChangeState(Enum.HumanoidStateType.PlatformStanding)
 	workspace.Gravity = 196.2
 
 	-- Disconnect connections
-	if heartbeatLoop  then
+	if heartbeatLoop then
 		heartbeatLoop:Disconnect()
 	end
 	heartbeatLoop = nil
 end
 
-local maintainFlight : Vector3 = nil
-
-local verticalWeight = 0
-
-function loop (dt : number)
+function loop(dt: number)
 	if flightMode then
-		-- TODO: Remove in prod -=-=-=-=-=-=-=-=-=-=-=
+		-- TODO: Testing optimal lateral mobility, Remove in prod
 		if lateralMobility == nil then
-			lateralMobility = plr.PlayerGui.DevGui.DevGuiFrame.LateralMobility.Value
+			-- lateralMobility = plr.PlayerGui.DevGui.DevGuiFrame.LateralMobility.Value
+			lateralMobility = Instance.new("IntValue")
+			lateralMobility.Value = 400
 		end
-
 
 		-- -=-=-=-=-=-=-=- Vector/Angle references -=-=-=-=-=-=-=-
 		local bodyMovement = hrp.AssemblyLinearVelocity
 		local speed = bodyMovement.Magnitude
 		local movementDirection = bodyMovement.Unit -- unit vector of player's velocity direction
-		local headingVector = hrp.CFrame.UpVector.Unit 
-		local velocityToHeadingAngle = math.deg(math.acos( movementDirection:Dot(headingVector))) -- angle between
+		local headingVector = hrp.CFrame.UpVector.Unit
+		local velocityToHeadingAngle = math.deg(math.acos(movementDirection:Dot(headingVector))) -- angle between
 
-		local movementY = Vector3.new(movementDirection.X,movementDirection.Y,0).Unit
-		local headingY = Vector3.new(headingVector.X,headingVector.Y,0).Unit
-		local yAng = math.deg(math.acos( movementY:Dot(headingY)))
+		local movementY = Vector3.new(movementDirection.X, movementDirection.Y, 0).Unit
+		local headingY = Vector3.new(headingVector.X, headingVector.Y, 0).Unit
+		local yAng = math.deg(math.acos(movementY:Dot(headingY)))
 
-		local velocityToHeadingCross = movementY:Cross(headingY) 
+		local velocityToHeadingCross = movementY:Cross(headingY)
 		--local headingIsAboveVelocity = velocityToHeadingCross.Z > 0 -- direction relative to heading
 		local headingIsAboveVelocity = headingY.Y > movementY.Y
 
@@ -172,20 +152,22 @@ function loop (dt : number)
 			
 			print("heading: " .. tostring(headingVector))
 			print("orientation: " .. tostring(alignOrientation.CFrame.UpVector))
-		]]--
+		]]
+		--
 
-		-- 
+		--
 		local bufferAngle = math.rad(1.0)
 
-		local movementDirectionCFrame = CFrame.new(Vector3.new(), movementDirection) * CFrame.Angles(-math.rad(90),0,0)
+		local movementDirectionCFrame = CFrame.new(Vector3.new(), movementDirection)
+			* CFrame.Angles(-math.rad(90), 0, 0)
 
 		alignOrientation.CFrame = movementDirectionCFrame
 
 		-- TODO: Testing: A weight variable that determines the percentage of the lift force that should be applied
 		local minimum = 0.5
 		local decay = 0.5 -- per sec
-		local growth = 2.0  -- per sec
-		if keysActive[Enum.KeyCode.S]  and verticalWeight < 1 then
+		local growth = 2.0 -- per sec
+		if keysActive[Enum.KeyCode.S] and verticalWeight < 1 then
 			verticalWeight += growth * dt -- full flight is achiveved in 2 secs
 		elseif verticalWeight > minimum then
 			verticalWeight -= decay * dt
@@ -197,24 +179,20 @@ function loop (dt : number)
 
 		--=-=-=-=-=-=-= Handle rotations -=-=-=-=-=-=-=-=-=-=-
 		if keysActive[Enum.KeyCode.W] and not playerPitchTooLow() then
-			alignOrientation.CFrame *= CFrame.Angles(-math.rad(AoA + bufferAngle),0,0)
+			alignOrientation.CFrame *= CFrame.Angles(-math.rad(AoA + bufferAngle), 0, 0)
 		elseif keysActive[Enum.KeyCode.S] and not playerPitchTooHigh() then
-			alignOrientation.CFrame *= CFrame.Angles(math.rad(AoA - bufferAngle),0,0)
+			alignOrientation.CFrame *= CFrame.Angles(math.rad(AoA - bufferAngle), 0, 0)
 		end
 
-
-		if keysActive[Enum.KeyCode.A]then
-			alignOrientation.CFrame *= CFrame.Angles(0,0,math.rad(AoA - bufferAngle))
+		if keysActive[Enum.KeyCode.A] then
+			alignOrientation.CFrame *= CFrame.Angles(0, 0, math.rad(AoA - bufferAngle))
 		elseif keysActive[Enum.KeyCode.D] then
-			alignOrientation.CFrame *= CFrame.Angles(0,0,-math.rad(AoA - bufferAngle))
+			alignOrientation.CFrame *= CFrame.Angles(0, 0, -math.rad(AoA - bufferAngle))
 		end
-		
+
 		-- -=--=-=-=-=-=-=-=-= Apply aerodynamic forces -=-=-=-=-=-=-=-=-=-=-=-
 		for i, data in parts do
-
-
-			--=-=-=-=-=-= For a part other than torso -=-=-=-=-=-
-			data.NetForce.Force = Vector3.new(0,0,0) -- Reset force for each part
+			data.NetForce.Force = Vector3.new(0, 0, 0) -- Reset force for each part
 
 			--  Lift magnitude
 			local density = 0.32
@@ -228,20 +206,13 @@ function loop (dt : number)
 
 				-- Turn up
 			elseif keysActive[Enum.KeyCode.S] and not playerPitchTooHigh() then
-				data.NetForce.Force += (-hrp.CFrame.LookVector) * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight-- keybinds affect orientation
+				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight -- keybinds affect orientation
 				maintainFlight = bodyMovement
 
 				-- Maintain altitude
 			elseif maintainFlight ~= nil and bodyMovement.Y < maintainFlight.Y then
-				data.NetForce.Force += (-hrp.CFrame.LookVector) * liftMag
+				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag
 			end
-
-			--[[
-				Note: We can apply an orientation on top of the existing CFrame because it always gets reset in the code above
-				i.e: We don't have to worry about these rotation operations "stacking up" on each other
-				
-				** Also, the direction of the turning force isn't to the right of the torso, but to the right of alignOrientation!
-			]]
 
 			-- Turn left and right
 			if keysActive[Enum.KeyCode.A] then
@@ -260,26 +231,324 @@ function loop (dt : number)
 		-- Check for stall (can happen whether or not the player is pressing anything)
 		if isStalling(bodyMovement, dt) then
 			local downwardsMovementDirectionCFrame = movementDirectionCFrame
-			downwardsMovementDirectionCFrame *= CFrame.Angles(-math.rad(70),0,0)
-
+			downwardsMovementDirectionCFrame *= CFrame.Angles(-math.rad(70), 0, 0)
 			targetVelocityUnit = downwardsMovementDirectionCFrame.UpVector
 		end
+		-- TODO: -=-=-=-=-=-=-=-=-= Debugging -=-=-=-=-=-=-=-=-=-=
+		-- if showVectorVisuals then
+		-- 	updateVisuals()
+		-- end
 
-
-
-		if showVectorVisuals  then
-			updateVisuals()
-		end
-
-		--local pointsEarned = updatePoints(speed, dt)
-		--updateMultiplier(pointsEarned, dt)
-
-
-		--=-=-=-=-=-=-==-= Draw -=-=-==-=-=-=-=-
 		--drawPoints()
 		--drawMultiplier()
+	end
+end
 
+function isTurning()
+	return keysActive[Enum.KeyCode.A] or keysActive[Enum.KeyCode.D]
+end
 
+function isPitching()
+	return keysActive[Enum.KeyCode.W] or keysActive[Enum.KeyCode.S]
+end
+
+function getAngleBetween(vector1, vector2)
+	return math.deg(math.acos(vector1:Dot(vector2)))
+end
+
+function playerPitchTooHigh()
+	-- check if it's within the max degrees of freedom
+	local velocityUnit = hrp.CFrame.UpVector
+	local groundVector = velocityUnit * Vector3.new(1, 0, 1)
+	local pitchAngle = getAngleBetween(velocityUnit, groundVector)
+	if pitchAngle < PITCH_DEGREES_OF_FREEDOM then
+		return false
+	end
+
+	-- at this point, the pitch angle exceeds the max degrees of freedom
+	-- so check if it's because the player is too high or too low
+	local direction = velocityUnit:Cross(groundVector).Z -- a negative value means the player is too high
+	return direction < 0
+end
+
+function playerPitchTooLow()
+	-- check if it's within the max degrees of freedom
+	local velocityUnit = hrp.CFrame.UpVector
+	local groundVector = velocityUnit * Vector3.new(1, 0, 1)
+	local pitchAngle = getAngleBetween(velocityUnit, groundVector)
+
+	if pitchAngle < PITCH_DEGREES_OF_FREEDOM then
+		return false
+	end
+
+	-- at this point, the pitch angle exceeds the max degrees of freedom
+	-- so check if it's because the player is too high or too low
+	local direction = velocityUnit:Cross(groundVector).Z -- a negative value means the player is too high
+	return direction > 0
+end
+
+function adjustedDownBoost(speed)
+	local newDownBoost = BASE_DOWN_BOOST + (1 - speed / MAX_SPEED) * DOWN_BOOST
+	return newDownBoost
+end
+
+-- Turning force adjusted to the player's speed
+function adjustedTurningForce(speed)
+	--local newTurnForce = BASE_TURN_FORCE_MAGNITUDE + TURN_FORCE_MAGNITUDE / math.log(speed, 6) -- works
+	local newTurnForce = BASE_TURN_FORCE_MAGNITUDE + TURN_FORCE_MAGNITUDE / math.pow(speed, 0.3) -- new
+
+	return newTurnForce
+end
+
+-- Lift boost adjusted to the player's speed
+function adjustedLiftBoost(speed)
+	local newLiftBoost = LIFT_BOOST / math.pow(speed, 0.3) -- works
+	--print(newLiftBoost)
+	return newLiftBoost
+end
+
+function isStalling(bodyVelocity: Vector3, dt: number)
+	if lastBodyVelocity == nil then -- initial bodyVelocity
+		lastBodyVelocity = bodyVelocity
+		return
+	end
+
+	local acceleration = (bodyVelocity.Y - lastBodyVelocity.Y) * dt
+
+	lastBodyVelocity = bodyVelocity -- update change w/ respects to dt
+
+	if -1 < bodyVelocity.Y and bodyVelocity.Y < 1 and acceleration < 0 then -- Player is stalling if the velocity hits 0 and acceleration is negative
+		return true
+	end
+
+	return false
+end
+
+-- Apply forces to all parts of model
+function setupForces()
+	for i, v in pairs(character:GetChildren()) do
+		if v.ClassName == "Part" then
+			-- TODO: Adjust in prod
+			--local animationPart : Part = v:Clone() -- make a clone of the character's limbs which will be used for animation
+			--animationPart.Parent = character
+			--animationPart.Name = "Animation" .. tostring(v.Name)
+			--v.Transparency = 1
+
+			-- Make attachment for gravity to apply to
+			local attachment = Instance.new("Attachment")
+			local attachment1 = Instance.new("Attachment", v)
+			attachment.Parent = v
+			attachment.Position = Vector3.new(0, 0, 0)
+			attachment.Name = "ForceAttachment"
+			attachment1.Name = "Attachment1"
+
+			-- Make gravity
+			local netForce = Instance.new("VectorForce")
+			netForce.Name = "NetForce"
+			netForce.Force = Vector3.new(0, 0, 0)
+			netForce.RelativeTo = "World"
+
+			netForce.Parent = v
+			netForce.Attachment0 = attachment
+			netForce.Enabled = true
+
+			-- Visualize this force
+			local beam = Instance.new("Beam")
+			beam.Name = "VectorVisual"
+			beam.FaceCamera = true
+			beam.Segments = 1
+			beam.Width0 = 0.2
+			beam.Width1 = 0.2
+			beam.Color = ColorSequence.new(Color3.new(1, 0, 0))
+			beam.Attachment0 = attachment
+			beam.Attachment1 = attachment1
+			beam.Parent = v
+
+			-- Make the part aerdynamic
+			v.EnableFluidForces = true
+
+			-- Save a reference to this part
+			table.insert(parts, {
+				Part = v,
+				ForceAttachment = attachment,
+				Attachment1 = attachment1,
+				NetForce = netForce,
+				Beam = beam,
+			})
+		end
+	end
+
+	-- Use alignOrientation to control pitch of player
+	alignOrientation = Instance.new("AlignOrientation")
+	alignOrientation.CFrame = hrp.CFrame
+	alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	alignOrientation.Attachment0 = hrp.ForceAttachment
+	alignOrientation.Parent = hrp
+	alignOrientation.MaxTorque = ALIGN_ORIENTATION_MAX_TORQUE
+	alignOrientation.Responsiveness = ALIGN_ORIENTATION_RESPONSIVENESS
+	alignOrientation.AlignType = Enum.AlignType.AllAxes
+end
+
+function destroyForces()
+	for _, data in pairs(parts) do
+		data.ForceAttachment:Destroy()
+		data.Attachment1:Destroy()
+		data.Beam:Destroy()
+		data.NetForce:Destroy()
+	end
+	table.clear(parts)
+
+	local alignOrientation = hrp:FindFirstChild("AlignOrientation")
+	alignOrientation:Destroy()
+end
+
+function destroyVectorVisuals()
+	for _, data in pairs(vectorVisuals) do
+		data.beam:Destroy()
+		data.Attachment0:Destroy()
+		data.Attachment1:Destroy()
+	end
+	table.clear(vectorVisuals)
+end
+
+-- Debugging
+function setupVectorVisuals()
+	local tempVectorVisuals = {}
+	-- Initialize visuals
+	local velocityVisual = Instance.new("Beam")
+	velocityVisual.Name = "VelocityVisual"
+	velocityVisual.Color = ColorSequence.new(Color3.new(1, 1, 0))
+	table.insert(tempVectorVisuals, velocityVisual)
+
+	local HeadingVisual = Instance.new("Beam")
+	HeadingVisual.Name = "HeadingVisual"
+	HeadingVisual.Color = ColorSequence.new(Color3.new(0.179583, 0.675776, 0.996979))
+	table.insert(tempVectorVisuals, HeadingVisual)
+
+	local alignOrientationVisual = Instance.new("Beam")
+	alignOrientationVisual.Name = "alignOrientationVisual"
+	alignOrientationVisual.Color = ColorSequence.new(Color3.new(0.675334, 0.97528, 0.336172))
+	table.insert(tempVectorVisuals, alignOrientationVisual)
+
+	local TargetVelocityVisual = Instance.new("Beam")
+	TargetVelocityVisual.Name = "TargetVelocityVisual"
+	TargetVelocityVisual.Color = ColorSequence.new(Color3.new(0.917281, 1, 0.926604))
+	table.insert(tempVectorVisuals, TargetVelocityVisual)
+
+	-- Set up visuals
+	for i, beam in ipairs(tempVectorVisuals) do
+		local attachment = Instance.new("Attachment")
+		local attachment1 = Instance.new("Attachment", humanoid.RootPart)
+		attachment.Parent = humanoid.RootPart
+		attachment.Position = Vector3.new(0, 0, 0)
+
+		beam.FaceCamera = true
+		beam.Segments = 1
+		beam.Width0 = 0.2
+		beam.Width1 = 0.2
+		beam.Attachment0 = attachment
+		beam.Attachment1 = attachment1
+		beam.Parent = humanoid.RootPart
+
+		local beamName = beam.Name
+		table.insert(vectorVisuals, {
+			beam = beam,
+			Attachment0 = attachment,
+			Attachment1 = attachment1,
+		})
+	end
+end
+
+uis.InputEnded:Connect(function(input, gameProcessedEvent)
+	if input.KeyCode == Enum.KeyCode.W then
+		keysActive[Enum.KeyCode.W] = false
+	elseif input.KeyCode == Enum.KeyCode.S then
+		keysActive[Enum.KeyCode.S] = false
+	elseif input.KeyCode == Enum.KeyCode.D then
+		keysActive[Enum.KeyCode.D] = false
+	elseif input.KeyCode == Enum.KeyCode.A then
+		keysActive[Enum.KeyCode.A] = false
+	elseif input.KeyCode == Enum.KeyCode.Space then
+		keysActive[Enum.KeyCode.Space] = false
+	end
+end)
+
+-- Checks if at least one key is being perssed
+function atLeastOneKeyPressed()
+	for key, value in pairs(keysActive) do
+		if value == true then
+			return true
+		end
+	end
+
+	return false
+end
+
+-- Checks if at least one key is being perssed
+function atLeastOnePitchKeyPressed()
+	if keysActive[Enum.KeyCode.W] or keysActive[Enum.KeyCode.S] then
+		return true
+	end
+
+	return false
+end
+
+uis.InputBegan:Connect(function(input, gameProcessedEvent)
+	if input.KeyCode == Enum.KeyCode.W then
+		keysActive[Enum.KeyCode.W] = true
+	elseif input.KeyCode == Enum.KeyCode.S then
+		keysActive[Enum.KeyCode.S] = true
+	elseif input.KeyCode == Enum.KeyCode.D then
+		keysActive[Enum.KeyCode.D] = true
+	elseif input.KeyCode == Enum.KeyCode.A then
+		keysActive[Enum.KeyCode.A] = true
+	elseif input.KeyCode == Enum.KeyCode.Space then
+		keysActive[Enum.KeyCode.Space] = true
+	end
+end)
+
+plr.CharacterAdded:Connect(function()
+	resetState()
+
+	-- instances
+	destroyForces()
+	destroyVectorVisuals()
+
+	start()
+end)
+----------------------- DEBUGGING -----------------------
+-- Debugging
+function updateVisuals()
+	-- Visualize the force vectors in 3D spacing using a rectangular cube
+	if flightMode then
+		-- Update vector sizes
+		for i, part in parts do
+			assert(part.Attachment1 and part.ForceAttachment and part.NetForce)
+			part.Attachment1.WorldPosition = part.ForceAttachment.WorldPosition + part.NetForce.Force / 40
+		end
+
+		-- Visualize vectors
+		local velocityVis = humanoid.RootPart.VelocityVisual
+		local headingVis = humanoid.RootPart.HeadingVisual
+		local alignOrientationVis = humanoid.RootPart.alignOrientationVisual
+		local targetVelocityVis = humanoid.RootPart.TargetVelocityVisual
+
+		if velocityVis and headingVis and alignOrientationVis then
+			velocityVis.Attachment1.WorldPosition = velocityVis.Attachment0.WorldPosition
+				+ hrp.AssemblyLinearVelocity.Unit * 5
+			--headingVis.Attachment1.WorldPosition = headingVis.Attachment0.WorldPosition + hrp.CFrame.UpVector.Unit * 5
+			alignOrientationVis.Attachment1.WorldPosition = alignOrientationVis.Attachment0.WorldPosition
+				+ alignOrientation.CFrame.UpVector.Unit * 5
+		end
+
+		if targetVelocityVis and maintainFlight then
+			targetVelocityVis.Attachment1.WorldPosition = targetVelocityVis.Attachment0.WorldPosition
+				+ maintainFlight.Unit * 5
+		end
+
+		-- Visualize points hitbox
+		assert(hrp.PointsHitBox)
+		hrp.PointsHitBox.CFrame = hrp.CFrame
 	end
 end
 
@@ -305,389 +574,3 @@ end
 --	local ySize = multiplierBarFrame.Size.Y.Offset
 --	multiplierHealthFrame.Size = UDim2.new(0, xSize, 0, ySize)
 --end
-
-
-
-function isTurning()
-	return keysActive[Enum.KeyCode.A] or keysActive[Enum.KeyCode.D]
-end
-
-function isPitching()
-	return keysActive[Enum.KeyCode.W] or keysActive[Enum.KeyCode.S]
-end
-
-function getAngleBetween(vector1, vector2)
-	return math.deg(math.acos(vector1:Dot(vector2)))
-end
-
-
-function playerPitchTooHigh()
-	-- check if it's within the max degrees of freedom
-	local velocityUnit = hrp.CFrame.UpVector
-	local groundVector  = velocityUnit * Vector3.new(1,0,1)
-	local pitchAngle = getAngleBetween(velocityUnit, groundVector)
-	if (pitchAngle < PITCH_DEGREES_OF_FREEDOM) then
-		return false
-	end
-
-	-- at this point, the pitch angle exceeds the max degrees of freedom
-	-- so check if it's because the player is too high or too low
-	local direction = velocityUnit:Cross(groundVector).Z -- a negative value means the player is too high
-	return direction < 0
-end
-
-function playerPitchTooLow()
-	-- check if it's within the max degrees of freedom
-	local velocityUnit = hrp.CFrame.UpVector
-	local groundVector  = velocityUnit * Vector3.new(1,0,1)
-	local pitchAngle = getAngleBetween(velocityUnit, groundVector)
-
-	if (pitchAngle < PITCH_DEGREES_OF_FREEDOM) then
-		return false
-	end
-
-	-- at this point, the pitch angle exceeds the max degrees of freedom
-	-- so check if it's because the player is too high or too low
-	local direction = velocityUnit:Cross(groundVector).Z -- a negative value means the player is too high
-	return direction > 0
-end
-
-function adjustedDownBoost(speed)
-	local newDownBoost = BASE_DOWN_BOOST + (1 - speed/MAX_SPEED) * DOWN_BOOST
-	return newDownBoost
-end
-
--- Turning force adjusted to the player's speed
-function adjustedTurningForce(speed)
-	--local newTurnForce = BASE_TURN_FORCE_MAGNITUDE + TURN_FORCE_MAGNITUDE / math.log(speed, 6) -- works
-	local newTurnForce = BASE_TURN_FORCE_MAGNITUDE + TURN_FORCE_MAGNITUDE / math.pow(speed, 0.3) -- new
-
-	return newTurnForce
-end
-
--- Lift boost adjusted to the player's speed
-function adjustedLiftBoost(speed)
-	local newLiftBoost = LIFT_BOOST / math.pow(speed, 0.3) -- works
-	--print(newLiftBoost)
-	return newLiftBoost
-end
-
-function isStalling(bodyVelocity : Vector3, dt : number) 
-	if lastBodyVelocity == nil then -- initial bodyVelocity
-		lastBodyVelocity = bodyVelocity
-		return
-	end
-
-	local acceleration = (bodyVelocity.Y - lastBodyVelocity.Y ) * dt
-
-	lastBodyVelocity = bodyVelocity -- update change w/ respects to dt
-
-	if -1 < bodyVelocity.Y and bodyVelocity.Y < 1 and acceleration < 0 then -- Player is stalling if the velocity hits 0 and acceleration is negative	
-		return true
-	end
-
-	return false
-end
-
--- Debugging
-function updateVisuals  ()
-	-- Visualize the force vectors in 3D spacing using a rectangular cube
-	if flightMode then
-		-- Update vector sizes
-		for i, part in parts do
-			assert(part.Attachment1 and part.ForceAttachment and part.NetForce)
-			part.Attachment1.WorldPosition = part.ForceAttachment.WorldPosition + part.NetForce.Force / 40
-		end
-
-
-		-- Visualize vectors
-		local velocityVis = humanoid.RootPart.VelocityVisual
-		local headingVis = humanoid.RootPart.HeadingVisual
-		local alignOrientationVis = humanoid.RootPart.alignOrientationVisual
-		local targetVelocityVis = humanoid.RootPart.TargetVelocityVisual
-
-
-		if velocityVis and headingVis and alignOrientationVis then
-			velocityVis.Attachment1.WorldPosition = velocityVis.Attachment0.WorldPosition + hrp.AssemblyLinearVelocity.Unit * 5
-			--headingVis.Attachment1.WorldPosition = headingVis.Attachment0.WorldPosition + hrp.CFrame.UpVector.Unit * 5
-			alignOrientationVis.Attachment1.WorldPosition = alignOrientationVis.Attachment0.WorldPosition + alignOrientation.CFrame.UpVector.Unit * 5
-		end
-
-		if targetVelocityVis and maintainFlight then
-			targetVelocityVis.Attachment1.WorldPosition = targetVelocityVis.Attachment0.WorldPosition + maintainFlight.Unit * 5
-		end
-
-		-- Visualize points hitbox
-		assert(hrp.PointsHitBox)
-		hrp.PointsHitBox.CFrame = hrp.CFrame
-
-	end
-end
-
-
--- Apply forces to all parts of model
-function setupForces()
-
-	for i,v in pairs(character:GetChildren()) do
-		if v.ClassName == "Part" then
-			-- TODO: Adjust in prod
-			--local animationPart : Part = v:Clone() -- make a clone of the character's limbs which will be used for animation
-			--animationPart.Parent = character
-			--animationPart.Name = "Animation" .. tostring(v.Name)
-			--v.Transparency = 1
-
-
-
-
-			-- Make attachment for gravity to apply to
-			local attachment = Instance.new("Attachment")
-			local attachment1 = Instance.new("Attachment", v)
-			attachment.Parent = v 
-			attachment.Position = Vector3.new(0,0,0)
-			attachment.Name = "ForceAttachment"
-			attachment1.Name = "Attachment1"
-
-			-- Make gravity 
-			local netForce = Instance.new("VectorForce")
-			netForce.Name = "NetForce"
-			netForce.Force = Vector3.new(0,0,0)
-			netForce.RelativeTo = "World"
-
-			netForce.Parent = v
-			netForce.Attachment0 = attachment
-			netForce.Enabled = true
-
-			-- Visualize this force
-			local beam = Instance.new("Beam")
-			beam.Name = "VectorVisual"
-			beam.FaceCamera = true
-			beam.Segments = 1
-			beam.Width0 = 0.2
-			beam.Width1 = 0.2
-			beam.Color = ColorSequence.new(Color3.new(1,0,0))
-			beam.Attachment0 = attachment
-			beam.Attachment1 = attachment1
-			beam.Parent = v	
-
-			-- Make the part aerdynamic
-			v.EnableFluidForces = true
-
-			-- Save a reference to this part
-			table.insert(parts, {
-				Part = v,
-				ForceAttachment = attachment,
-				Attachment1 = attachment1,
-				NetForce = netForce,
-				Beam = beam
-			})
-		end
-	end
-
-	-- Use alignOrientation to control pitch of player
-	alignOrientation = Instance.new("AlignOrientation")
-	alignOrientation.CFrame = hrp.CFrame
-	alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
-	alignOrientation.Attachment0 = hrp.ForceAttachment
-	alignOrientation.Parent = hrp
-	alignOrientation.MaxTorque = ALIGN_ORIENTATION_MAX_TORQUE
-	alignOrientation.Responsiveness = ALIGN_ORIENTATION_RESPONSIVENESS
-	alignOrientation.AlignType = Enum.AlignType.AllAxes
-
-end
-
-function destroyForces()
-	for _, data in pairs(parts) do
-		data.ForceAttachment:Destroy()
-		data.Attachment1:Destroy()
-		data.Beam:Destroy()
-		data.NetForce:Destroy()
-	end
-	table.clear(parts)
-
-	local alignOrientation = hrp:FindFirstChild("AlignOrientation")
-	alignOrientation:Destroy()
-end
-
-function destroyVectorVisuals()
-	for _, data in pairs(vectorVisuals) do
-		data.beam:Destroy()
-		data.Attachment0:Destroy()
-		data.Attachment1:Destroy()
-	end
-	table.clear(vectorVisuals)
-end
-
--- TODO: Refactor and move this to cameraFX script
--- Updates points and returns the amount of points earned from this call
---function updatePoints (speed, dt)
---	local pointsDt = 0
-
---	-- Shoot 8 raycasts around the up axis of the player
---	local raycastParams = RaycastParams.new()
-
---	local filterInstances = {}
---	for _, data in parts do
---		table.insert(filterInstances, data.Part)
---	end
-
---	raycastParams.FilterDescendantsInstances = filterInstances
---	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-
---	local baseCFrame = CFrame.new(hrp.CFrame.Position) * CFrame.fromEulerAnglesXYZ(hrp.CFrame:ToEulerAnglesXYZ())
---	local numHits = 0
-
---	local distances = {}
---	for i = 0, 8, 1 do
---		local octalCFrame = baseCFrame * CFrame.Angles(0,math.rad(45 * i),0)
-
---		local proximityCheck = workspace:Raycast(octalCFrame.Position, octalCFrame.RightVector * POINTS_HITBOX_RADIUS, raycastParams)
-
---		if proximityCheck then
---			numHits += 1
---			table.insert(distances, proximityCheck.Distance)
---		end
---	end
-
---	-- TODO: Special point awards
---	if numHits >= 8 then
-
---		local avg = 0
---		for _, distance in pairs(distances) do
---			avg += distance
---		end
-
---		avg /= 8
-
---		local tier = pointsModule.getTier(avg)
---		rewardedPlayerClientEvent:Fire(pointsModule.TierColors[tier])
-
---	end
-
---	return pointsDt 
---end
-
---function drawPoints()
---	if not playerGui then
---		playerGui = plr:FindFirstChild("PlayerGui")
---		return
---	end
-
---	if not pointsLabel then
---		pointsLabel = playerGui.Gui.Points
---		return
---	end
-
---	pointsLabel.Text = points
---end
-
---function calculatePoints(speed, dt)
---	return (speed/MAX_SPEED * 500) * dt * multipliers[multiplierIndex]
---end
-
--- Debugging
-function setupVectorVisuals()
-
-	local tempVectorVisuals = {}
-	-- Initialize visuals
-	local velocityVisual = Instance.new("Beam")
-	velocityVisual.Name = "VelocityVisual"
-	velocityVisual.Color = ColorSequence.new(Color3.new(1,1,0))
-	table.insert(tempVectorVisuals, velocityVisual)
-
-	local HeadingVisual = Instance.new("Beam")
-	HeadingVisual.Name = "HeadingVisual"
-	HeadingVisual.Color = ColorSequence.new(Color3.new(0.179583, 0.675776, 0.996979))
-	table.insert(tempVectorVisuals, HeadingVisual)
-
-	local alignOrientationVisual = Instance.new("Beam")
-	alignOrientationVisual.Name = "alignOrientationVisual"
-	alignOrientationVisual.Color = ColorSequence.new(Color3.new(0.675334, 0.97528, 0.336172))
-	table.insert(tempVectorVisuals, alignOrientationVisual)
-
-	local TargetVelocityVisual = Instance.new("Beam")
-	TargetVelocityVisual.Name = "TargetVelocityVisual"
-	TargetVelocityVisual.Color = ColorSequence.new(Color3.new(0.917281, 1, 0.926604))
-	table.insert(tempVectorVisuals, TargetVelocityVisual)
-
-	-- Set up visuals
-	for i, beam in ipairs(tempVectorVisuals) do
-		local attachment = Instance.new("Attachment")
-		local attachment1 = Instance.new("Attachment", humanoid.RootPart)
-		attachment.Parent = humanoid.RootPart
-		attachment.Position = Vector3.new(0,0,0)
-
-		beam.FaceCamera = true
-		beam.Segments = 1
-		beam.Width0 = 0.2
-		beam.Width1 = 0.2
-		beam.Attachment0 = attachment
-		beam.Attachment1 = attachment1
-		beam.Parent = humanoid.RootPart
-
-		local beamName = beam.Name
-		table.insert(vectorVisuals, {
-			beam = beam,
-			Attachment0 = attachment,
-			Attachment1 = attachment1
-		})
-	end
-end
-
-uis.InputEnded:Connect(function(input, gameProcessedEvent)
-	if input.KeyCode == Enum.KeyCode.W  then
-		keysActive[Enum.KeyCode.W] = false
-	elseif input.KeyCode == Enum.KeyCode.S  then
-		keysActive[Enum.KeyCode.S] = false
-	elseif input.KeyCode == Enum.KeyCode.D  then
-		keysActive[Enum.KeyCode.D] = false
-	elseif input.KeyCode == Enum.KeyCode.A  then
-		keysActive[Enum.KeyCode.A] = false
-	elseif input.KeyCode == Enum.KeyCode.Space then
-		keysActive[Enum.KeyCode.Space] = false
-	end
-end)
-
--- Checks if at least one key is being perssed
-function atLeastOneKeyPressed() 
-	for key, value in pairs(keysActive) do
-		if value == true  then
-			return true
-		end
-	end
-
-	return false
-end
-
--- Checks if at least one key is being perssed
-function atLeastOnePitchKeyPressed() 
-	if keysActive[Enum.KeyCode.W] or keysActive[Enum.KeyCode.S] then
-		return true
-	end
-
-	return false
-end
-
-uis.InputBegan:Connect(function(input, gameProcessedEvent) 
-	if input.KeyCode == Enum.KeyCode.W then
-		keysActive[Enum.KeyCode.W] = true
-	elseif input.KeyCode == Enum.KeyCode.S then
-		keysActive[Enum.KeyCode.S] = true
-	elseif input.KeyCode == Enum.KeyCode.D then
-		keysActive[Enum.KeyCode.D] = true
-	elseif input.KeyCode == Enum.KeyCode.A then
-		keysActive[Enum.KeyCode.A] = true
-	elseif input.KeyCode == Enum.KeyCode.Space then
-		keysActive[Enum.KeyCode.Space] = true
-	end
-end)
-
-plr.CharacterAdded:Connect(function()
-	resetState()
-
-	-- instances
-	destroyForces()
-	destroyVectorVisuals()
-	
-	start(false)
-end)

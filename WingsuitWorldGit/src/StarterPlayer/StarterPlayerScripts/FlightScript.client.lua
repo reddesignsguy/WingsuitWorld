@@ -34,6 +34,8 @@ local heartbeatLoop = nil
 local alignOrientation: AlignOrientation = nil
 local maintainFlight: Vector3 = nil
 local verticalWeight = 0
+local breakPercentage = 0
+
 -- local POINTS_HITBOX_RADIUS = 60 -- TODO: Testing the hitbox radius for earning points, Remove in prod
 local lastBodyVelocity = nil -- for calculating acceleration; used for detecting stall
 
@@ -57,6 +59,7 @@ local keysActive = {
 	[Enum.KeyCode.S] = false,
 	[Enum.KeyCode.A] = false,
 	[Enum.KeyCode.D] = false,
+	[Enum.KeyCode.Space] = false,
 }
 
 -- Starts the loop
@@ -162,6 +165,10 @@ function loop(dt: number)
 			* CFrame.Angles(-math.rad(90), 0, 0)
 
 		alignOrientation.CFrame = movementDirectionCFrame
+		local breakingOrientationAngle = 45
+		if isBreaking() then
+			alignOrientation.CFrame *= CFrame.Angles(math.rad(breakingOrientationAngle), 0, 0)
+		end
 
 		-- TODO: Testing: A weight variable that determines the percentage of the lift force that should be applied
 		local minimum = 0.5
@@ -191,27 +198,48 @@ function loop(dt: number)
 		end
 
 		-- -=--=-=-=-=-=-=-=-= Apply aerodynamic forces -=-=-=-=-=-=-=-=-=-=-=-
-		for i, data in parts do
+		local breakMin = 0.5
+		local breakDecay = 0.5 -- per sec
+		local breakGrowth = 2.0 -- per sec
+		if isBreaking() and breakPercentage < 1 then
+			breakPercentage += breakGrowth * dt -- full flight is achiveved in 2 secs
+		elseif breakPercentage > minimum then
+			breakPercentage -= breakDecay * dt
+
+			if breakPercentage < breakMin then
+				breakPercentage = breakMin
+			end
+		end
+
+		local density = 0.32
+		for _, data in parts do
 			data.NetForce.Force = Vector3.new(0, 0, 0) -- Reset force for each part
 
-			--  Lift magnitude
-			local density = 0.32
-			local area = 0.1
-			local liftMag = liftCoefficient * (0.5 * density * math.pow(bodyMovement.Magnitude, 2) * area)
+			-- Turning up and down settings for breaking and gliding
+			if isBreaking() then
+				--  Break magnitude
+				local area = 0.05
+				local breakMag = liftCoefficient * (0.5 * density * math.pow(bodyMovement.Magnitude, 2) * area)
+				data.NetForce.Force += -hrp.CFrame.LookVector * breakMag * breakPercentage -- keybinds affect orientation
+			else
+				--  Lift magnitude
+				local area = 0.1
+				local liftMag = liftCoefficient * (0.5 * density * math.pow(bodyMovement.Magnitude, 2) * area)
 
-			-- Turn down
-			if keysActive[Enum.KeyCode.W] and not playerPitchTooLow() then
-				data.NetForce.Force += alignOrientation.CFrame.LookVector * liftMag
-				maintainFlight = bodyMovement
+				-- Turn down
+				if keysActive[Enum.KeyCode.W] and not playerPitchTooLow() then
+					data.NetForce.Force += alignOrientation.CFrame.LookVector * liftMag
+					maintainFlight = bodyMovement
 
 				-- Turn up
-			elseif keysActive[Enum.KeyCode.S] and not playerPitchTooHigh() then
-				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight -- keybinds affect orientation
-				maintainFlight = bodyMovement
+				elseif keysActive[Enum.KeyCode.S] and not playerPitchTooHigh() then
+					data.NetForce.Force += -hrp.CFrame.LookVector * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight -- keybinds affect orientation
+					maintainFlight = bodyMovement
 
 				-- Maintain altitude
-			elseif maintainFlight ~= nil and bodyMovement.Y < maintainFlight.Y then
-				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag
+				elseif maintainFlight ~= nil and bodyMovement.Y < maintainFlight.Y then
+					data.NetForce.Force += -hrp.CFrame.LookVector * liftMag
+				end
 			end
 
 			-- Turn left and right
@@ -250,6 +278,10 @@ end
 
 function isPitching()
 	return keysActive[Enum.KeyCode.W] or keysActive[Enum.KeyCode.S]
+end
+
+function isBreaking()
+	return keysActive[Enum.KeyCode.Space]
 end
 
 function getAngleBetween(vector1, vector2)
@@ -459,20 +491,6 @@ function setupVectorVisuals()
 	end
 end
 
-uis.InputEnded:Connect(function(input, gameProcessedEvent)
-	if input.KeyCode == Enum.KeyCode.W then
-		keysActive[Enum.KeyCode.W] = false
-	elseif input.KeyCode == Enum.KeyCode.S then
-		keysActive[Enum.KeyCode.S] = false
-	elseif input.KeyCode == Enum.KeyCode.D then
-		keysActive[Enum.KeyCode.D] = false
-	elseif input.KeyCode == Enum.KeyCode.A then
-		keysActive[Enum.KeyCode.A] = false
-	elseif input.KeyCode == Enum.KeyCode.Space then
-		keysActive[Enum.KeyCode.Space] = false
-	end
-end)
-
 -- Checks if at least one key is being perssed
 function atLeastOneKeyPressed()
 	for key, value in pairs(keysActive) do
@@ -504,6 +522,20 @@ uis.InputBegan:Connect(function(input, gameProcessedEvent)
 		keysActive[Enum.KeyCode.A] = true
 	elseif input.KeyCode == Enum.KeyCode.Space then
 		keysActive[Enum.KeyCode.Space] = true
+	end
+end)
+
+uis.InputEnded:Connect(function(input, gameProcessedEvent)
+	if input.KeyCode == Enum.KeyCode.W then
+		keysActive[Enum.KeyCode.W] = false
+	elseif input.KeyCode == Enum.KeyCode.S then
+		keysActive[Enum.KeyCode.S] = false
+	elseif input.KeyCode == Enum.KeyCode.D then
+		keysActive[Enum.KeyCode.D] = false
+	elseif input.KeyCode == Enum.KeyCode.A then
+		keysActive[Enum.KeyCode.A] = false
+	elseif input.KeyCode == Enum.KeyCode.Space then
+		keysActive[Enum.KeyCode.Space] = false
 	end
 end)
 

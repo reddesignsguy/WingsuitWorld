@@ -42,7 +42,7 @@ local lastBodyVelocity = nil -- for calculating acceleration; used for detecting
 -- Physics parameters
 local MAX_SPEED = constants.MAX_SPEED
 local GRAVITY = 70 -- 160 gravity, 0.001 air density
-local AoA = 12.5 -- degrees
+local AoA = 15 -- degrees
 local liftCoefficient = 0.5
 local LIFT_BOOST = 4.5 ^ 2 -- Higher = the more maneuvarabilty, but slows down horizontal speed faster -> less transfer to vertical height momentum
 local LIFT_BASE_BOOST_NEW = 3.0

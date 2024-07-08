@@ -9,17 +9,17 @@ local cameraShaker = require(replicatedStorage.CameraShaker)
 
 -- Events
 local exitedFlightModeClientEvent = replicatedStorage.ClientEvents.ExitedFlightMode
-local enteredFlightModeClientEvent =  replicatedStorage.ClientEvents.EnteredFlightMode
-local enteredFlightMode =  replicatedStorage.Events.EnteredFlightMode
+local enteredFlightModeClientEvent = replicatedStorage.ClientEvents.EnteredFlightMode
+local enteredFlightMode = replicatedStorage.Events.EnteredFlightMode
 local exitedFlightModeEvent = replicatedStorage.Events.ExitedFlightMode
 
 -- TODO: Globalize activeKeys in another script -=-=-=
 local uis = game:GetService("UserInputService")
 local keysActive = {
-	[Enum.KeyCode.W]=false,
-	[Enum.KeyCode.S]=false,
-	[Enum.KeyCode.A]=false,
-	[Enum.KeyCode.D]=false
+	[Enum.KeyCode.W] = false,
+	[Enum.KeyCode.S] = false,
+	[Enum.KeyCode.A] = false,
+	[Enum.KeyCode.D] = false,
 }
 -- TODO: -=-=-=-=-=-=-=-=-=-=-=
 
@@ -43,18 +43,18 @@ local MAX_SHAKE_ROUGHNESS_ADDITION = 30
 local windSound = Instance.new("Sound")
 windSound.SoundId = "rbxassetid://17619012144"
 windSound.Looped = true
-windSound.PlaybackRegion = NumberRange.new(3,68)
-windSound.Parent = camera 
+windSound.PlaybackRegion = NumberRange.new(3, 68)
+windSound.Parent = camera
 
-local cameraShake = cameraShaker.new(Enum.RenderPriority.Camera.Value + 2, function(shakeCf) 
+local cameraShake = cameraShaker.new(Enum.RenderPriority.Camera.Value + 2, function(shakeCf)
 	camera.CFrame *= shakeCf
 end)
 
 function setupCamera()
 	disassembleCamera()
 	character = player.Character or player.CharacterAdded:Wait()
-	
-	cameraShake:Start() 
+
+	cameraShake:Start()
 	windSound:Play()
 	RunService:BindToRenderStep("UpdateCamera", Enum.RenderPriority.Camera.Value + 1, updateCamera)
 end
@@ -64,52 +64,55 @@ function disassembleCamera()
 	character = nil
 	cameraShake:Stop()
 	windSound:Stop()
-	
+
 	RunService:UnbindFromRenderStep("UpdateCamera")
 end
 exitedFlightModeEvent.OnClientEvent:Connect(disassembleCamera)
 
-function updateCamera(dt)		
+function updateCamera(dt)
 	if character then
-		
-		local humanoid : Humanoid = character:WaitForChild("Humanoid")
-		
-		
-		local hrp : Part = character:FindFirstChild("HumanoidRootPart")
-		local headingVector = hrp.CFrame.UpVector.Unit 
-		
+		local humanoid: Humanoid = character:WaitForChild("Humanoid")
+
+		local hrp: Part = character:FindFirstChild("HumanoidRootPart")
+		local headingVector = hrp.CFrame.UpVector.Unit
+
 		if hrp then
 			local speed = 1
 			if speed then
 				speed = hrp.AssemblyLinearVelocity.Magnitude
 			end
-			
+
 			-- Sounds
 			windSound.PlaybackSpeed = 0 + speed / MAX_SPEED * 2.8
-				
+
 			-- Camera position
 			local pos = camera.CFrame.Position
 			local lookAt = camera.CFrame.LookVector
-			
+
 			local avgLift = physicsCalculator.getLiftMagnitude(hrp.AssemblyLinearVelocity)
-			local posGoal = (hrp.CFrame - hrp.AssemblyLinearVelocity.Unit * getCameraDepth(avgLift, speed, headingVector) )
+			local posGoal = (
+				hrp.CFrame
+				+ (
+						hrp.CFrame.RightVector:Cross(hrp.AssemblyLinearVelocity.Unit).Unit * 0.5
+						- hrp.AssemblyLinearVelocity.Unit
+					)
+					* getCameraDepth(avgLift, speed, headingVector)
+			)
 			posGoal = posGoal.Position
-			
+
 			local lookAtGoal = (hrp.CFrame.Position + hrp.AssemblyLinearVelocity.Unit * 50)
 			local newCFrame = CFrame.new(posGoal, lookAtGoal)
-			
-			
+
 			local goal = {}
-			goal.CFrame = newCFrame 
+			goal.CFrame = newCFrame
 			local tweenInfo = TweenInfo.new(1)
-			
-			
-			local tween = TweenService:Create(camera, tweenInfo, goal)		
+
+			local tween = TweenService:Create(camera, tweenInfo, goal)
 			tween:Play()
-			
+
 			-- Shake
 			cameraShake:ShakeOnce(getShakeMagnitude(avgLift), getShakeRoughness(avgLift), 0.1, 0.75, 0, 0)
-			
+
 			-- FOV
 			camera.FieldOfView = getCameraFOV(avgLift, speed, headingVector)
 		end
@@ -117,11 +120,11 @@ function updateCamera(dt)
 end
 
 function getShakeMagnitude(lift)
-	return MIN_SHAKE_MAGNITUDE + (lift / MAX_OBSERVED_LIFT)^3.75 * MAX_SHAKE_MAGNITUDE_ADDITION
+	return MIN_SHAKE_MAGNITUDE + (lift / MAX_OBSERVED_LIFT) ^ 3.75 * MAX_SHAKE_MAGNITUDE_ADDITION
 end
 
 function getShakeRoughness(lift)
-	return MIN_SHAKE_ROUGHNESS + (lift / MAX_OBSERVED_LIFT)^3.75 * MAX_SHAKE_ROUGHNESS_ADDITION
+	return MIN_SHAKE_ROUGHNESS + (lift / MAX_OBSERVED_LIFT) ^ 3.75 * MAX_SHAKE_ROUGHNESS_ADDITION
 end
 
 -- Orientation must be normalized normalized
@@ -147,18 +150,18 @@ player.CharacterRemoving:Connect(disassembleCamera)
 
 -- TODO: Globalize activeKeys in another script -=-=-=
 uis.InputEnded:Connect(function(input, gameProcessedEvent)
-	if input.KeyCode == Enum.KeyCode.W  then
+	if input.KeyCode == Enum.KeyCode.W then
 		keysActive[Enum.KeyCode.W] = false
-	elseif input.KeyCode == Enum.KeyCode.S  then
+	elseif input.KeyCode == Enum.KeyCode.S then
 		keysActive[Enum.KeyCode.S] = false
-	elseif input.KeyCode == Enum.KeyCode.D  then
+	elseif input.KeyCode == Enum.KeyCode.D then
 		keysActive[Enum.KeyCode.D] = false
-	elseif input.KeyCode == Enum.KeyCode.A  then
+	elseif input.KeyCode == Enum.KeyCode.A then
 		keysActive[Enum.KeyCode.A] = false
 	end
 end)
 
-uis.InputBegan:Connect(function(input, gameProcessedEvent) 
+uis.InputBegan:Connect(function(input, gameProcessedEvent)
 	if input.KeyCode == Enum.KeyCode.W then
 		keysActive[Enum.KeyCode.W] = true
 	elseif input.KeyCode == Enum.KeyCode.S then

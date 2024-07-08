@@ -86,21 +86,29 @@ function updateCamera(dt)
 			windSound.PlaybackSpeed = 0 + speed / MAX_SPEED * 2.8
 
 			-- Camera position
-			local pos = camera.CFrame.Position
-			local lookAt = camera.CFrame.LookVector
+			local lateralAxis = 0
+			if keysActive[Enum.KeyCode.D] then
+				lateralAxis = 1
+			elseif keysActive[Enum.KeyCode.A] then
+				lateralAxis = -1
+			end
+			local lateralPosGol = 0.1
+			local lateralLookAtGol = 100
 
 			local avgLift = physicsCalculator.getLiftMagnitude(hrp.AssemblyLinearVelocity)
 			local posGoal = (
 				hrp.CFrame
 				+ (
-						hrp.CFrame.RightVector:Cross(hrp.AssemblyLinearVelocity.Unit).Unit * 0.5
-						- hrp.AssemblyLinearVelocity.Unit
+						-hrp.CFrame.RightVector:Cross(hrp.AssemblyLinearVelocity.Unit).Unit -- down
+						- hrp.AssemblyLinearVelocity.Unit -- back
 					)
 					* getCameraDepth(avgLift, speed, headingVector)
 			)
 			posGoal = posGoal.Position
 
-			local lookAtGoal = (hrp.CFrame.Position + hrp.AssemblyLinearVelocity.Unit * 50)
+			local lookAtGoal = (
+				hrp.CFrame.Position + (hrp.AssemblyLinearVelocity.Unit * 1000) -- forward
+			)
 			local newCFrame = CFrame.new(posGoal, lookAtGoal)
 
 			local goal = {}

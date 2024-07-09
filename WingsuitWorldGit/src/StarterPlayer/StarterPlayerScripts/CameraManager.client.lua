@@ -99,7 +99,7 @@ function updateCamera(dt)
 			local posGoal = (
 				hrp.CFrame
 				+ (
-						-hrp.CFrame.RightVector:Cross(hrp.AssemblyLinearVelocity.Unit).Unit -- down
+						hrp.CFrame.RightVector:Cross(hrp.AssemblyLinearVelocity.Unit).Unit * 0.05 -- up
 						- hrp.AssemblyLinearVelocity.Unit -- back
 					)
 					* getCameraDepth(avgLift, speed, headingVector)
@@ -107,7 +107,7 @@ function updateCamera(dt)
 			posGoal = posGoal.Position
 
 			local lookAtGoal = (
-				hrp.CFrame.Position + (hrp.AssemblyLinearVelocity.Unit * 1000) -- forward
+				hrp.CFrame.Position + (hrp.AssemblyLinearVelocity.Unit * 100) -- forward
 			)
 			local newCFrame = CFrame.new(posGoal, lookAtGoal)
 

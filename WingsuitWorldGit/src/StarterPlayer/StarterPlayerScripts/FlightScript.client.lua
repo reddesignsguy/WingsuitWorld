@@ -75,6 +75,20 @@ function start()
 
 	heartbeatLoop = runService.Heartbeat:Connect(loop)
 
+	-- TODO: Lift arms while flying feature
+
+	local character = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
+	local torso = character:WaitForChild("Torso")
+	local weld = torso:FindFirstChild("Right Shoulder")
+
+	-- Rotate by adjusting the C0 property
+	weld.C1 = weld.C1 * CFrame.Angles(math.rad(90), 0, 0)
+
+	weld = torso:FindFirstChild("Left Shoulder")
+
+	-- Rotate by adjusting the C0 property
+	weld.C1 = weld.C1 * CFrame.Angles(math.rad(90), 0, 0)
+
 	-- TODO: =-=-=-=-=-=-=-=-=- Remove in prod (DEBUGGING) -=-=-=-=-=-=-=-=-=-=-=-=
 	-- if showVectorVisuals then
 	-- 	setupVectorVisuals()

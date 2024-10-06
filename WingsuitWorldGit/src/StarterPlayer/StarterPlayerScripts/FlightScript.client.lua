@@ -23,7 +23,7 @@ local vectorVisuals = {} -- TODO: Remove in prod
 
 --=-=-=-=-=-==-=-= Development and Parameters -=-=-=-=-=-=-=-=-=-=-=
 -- Debugging
-local showVectorVisuals = true
+-- local showVectorVisuals = true
 local lateralMobility = nil
 
 -- States
@@ -221,27 +221,32 @@ function loop(dt: number)
 			local area = 0.1
 			local liftMag = liftCoefficient * (0.5 * density * math.pow(bodyMovement.Magnitude, 2) * area)
 
-			-- Turn down
-			if keysActive[Enum.KeyCode.W] and not playerPitchTooLow() then
-				data.NetForce.Force += alignOrientation.CFrame.LookVector * liftMag
-				maintainFlight = bodyMovement
-
-				-- Turn up
-			elseif keysActive[Enum.KeyCode.S] and not playerPitchTooHigh() then
-				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight -- keybinds affect orientation
-				maintainFlight = bodyMovement
-
-				-- Maintain altitude
-			elseif maintainFlight ~= nil and bodyMovement.Y < maintainFlight.Y then
-				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag
-			end
-
-			-- TODO: Making left and right force units always be parallel to ground
+			-- TODO: REFACTOR: Making left and right force units always be parallel to ground
 			local UpVector: Vector3 = hrp.CFrame.UpVector
 			local turnVector: Vector3 = UpVector:Cross(Vector3.yAxis)
 
 			-- local turnDir = hrp.CFrame.RightVector
 			local turnDir = turnVector.Unit
+
+			-- TODO: Making up and down force units always be parallel to
+			local pitchVector: Vector3 = turnDir:Cross(hrp.CFrame.UpVector)
+
+			-- local pitchDir = hrp.CFrame.LookVector
+			local pitchDir = -pitchVector.Unit
+			-- Turn down
+			if keysActive[Enum.KeyCode.W] and not playerPitchTooLow() then
+				data.NetForce.Force += pitchDir * liftMag
+				maintainFlight = bodyMovement
+
+				-- Turn up
+			elseif keysActive[Enum.KeyCode.S] and not playerPitchTooHigh() then
+				data.NetForce.Force += -pitchDir * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight -- keybinds affect orientation
+				maintainFlight = bodyMovement
+
+				-- Maintain altitude
+			elseif maintainFlight ~= nil and bodyMovement.Y < maintainFlight.Y then
+				data.NetForce.Force += -pitchDir * liftMag
+			end
 
 			-- Turn left and right
 			if keysActive[Enum.KeyCode.A] then

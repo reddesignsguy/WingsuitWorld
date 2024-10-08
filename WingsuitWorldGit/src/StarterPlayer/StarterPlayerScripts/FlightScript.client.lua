@@ -23,7 +23,7 @@ local vectorVisuals = {} -- TODO: Remove in prod
 
 --=-=-=-=-=-==-=-= Development and Parameters -=-=-=-=-=-=-=-=-=-=-=
 -- Debugging
-local showVectorVisuals = false
+-- local showVectorVisuals = true
 local lateralMobility = nil
 
 -- States
@@ -39,7 +39,7 @@ local lastBodyVelocity = nil -- for calculating acceleration; used for detecting
 
 -- Physics parameters
 local MAX_SPEED = constants.MAX_SPEED
-local GRAVITY = 70 -- 160 gravity, 0.001 air density
+local GRAVITY = 60 -- 160 gravity, 0.001 air density
 local AoA = 12.5 -- degrees
 local liftCoefficient = 0.5
 local LIFT_BOOST = 4.5 ^ 2 -- Higher = the more maneuvarabilty, but slows down horizontal speed faster -> less transfer to vertical height momentum
@@ -75,10 +75,24 @@ function start()
 
 	heartbeatLoop = runService.Heartbeat:Connect(loop)
 
+	-- TODO: Lift arms while flying feature
+
+	local character = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
+	local torso = character:WaitForChild("Torso")
+	local weld = torso:FindFirstChild("Right Shoulder")
+
+	-- Rotate by adjusting the C0 property
+	weld.C1 = weld.C1 * CFrame.Angles(math.rad(90), 0, 0)
+
+	weld = torso:FindFirstChild("Left Shoulder")
+
+	-- Rotate by adjusting the C0 property
+	weld.C1 = weld.C1 * CFrame.Angles(math.rad(90), 0, 0)
+
 	-- TODO: =-=-=-=-=-=-=-=-=- Remove in prod (DEBUGGING) -=-=-=-=-=-=-=-=-=-=-=-=
-	-- if showVectorVisuals then
-	-- 	setupVectorVisuals()
-	-- end
+	if showVectorVisuals then
+		setupVectorVisuals()
+	end
 
 	-- Visualize the player's points hitbox
 	-- local pointsHitBox = Instance.new("Part")
@@ -158,8 +172,16 @@ function loop(dt: number)
 		--
 		local bufferAngle = math.rad(1.0)
 
+		local tilt = 0
+		-- -- TODO: Refactor (Responsible for tilting)
+		if keysActive[Enum.KeyCode.A] then
+			tilt = -30
+		elseif keysActive[Enum.KeyCode.D] then
+			tilt = 30
+		end
+
 		local movementDirectionCFrame = CFrame.new(Vector3.new(), movementDirection)
-			* CFrame.Angles(-math.rad(90), 0, 0)
+			* CFrame.Angles(-math.rad(90), math.rad(tilt), 0)
 
 		alignOrientation.CFrame = movementDirectionCFrame
 
@@ -199,26 +221,38 @@ function loop(dt: number)
 			local area = 0.1
 			local liftMag = liftCoefficient * (0.5 * density * math.pow(bodyMovement.Magnitude, 2) * area)
 
+			-- TODO: REFACTOR: Making left and right force units always be parallel to ground
+			local UpVector: Vector3 = hrp.CFrame.UpVector
+			local turnVector: Vector3 = UpVector:Cross(Vector3.yAxis)
+
+			-- local turnDir = hrp.CFrame.RightVector
+			local turnDir = turnVector.Unit
+
+			-- TODO: Making up and down force units always be parallel to
+			local pitchVector: Vector3 = turnDir:Cross(hrp.CFrame.UpVector)
+
+			-- local pitchDir = hrp.CFrame.LookVector
+			local pitchDir = -pitchVector.Unit
 			-- Turn down
 			if keysActive[Enum.KeyCode.W] and not playerPitchTooLow() then
-				data.NetForce.Force += alignOrientation.CFrame.LookVector * liftMag
+				data.NetForce.Force += pitchDir * liftMag
 				maintainFlight = bodyMovement
 
 				-- Turn up
 			elseif keysActive[Enum.KeyCode.S] and not playerPitchTooHigh() then
-				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight -- keybinds affect orientation
+				data.NetForce.Force += -pitchDir * liftMag * LIFT_BASE_BOOST_NEW * verticalWeight -- keybinds affect orientation
 				maintainFlight = bodyMovement
 
 				-- Maintain altitude
 			elseif maintainFlight ~= nil and bodyMovement.Y < maintainFlight.Y then
-				data.NetForce.Force += -hrp.CFrame.LookVector * liftMag
+				data.NetForce.Force += -pitchDir * liftMag
 			end
 
 			-- Turn left and right
 			if keysActive[Enum.KeyCode.A] then
-				data.NetForce.Force += -hrp.CFrame.RightVector * lateralMobility.Value
+				data.NetForce.Force += -turnDir * lateralMobility.Value
 			elseif keysActive[Enum.KeyCode.D] then
-				data.NetForce.Force += hrp.CFrame.RightVector * lateralMobility.Value
+				data.NetForce.Force += turnDir * lateralMobility.Value
 			end
 		end
 
@@ -235,9 +269,9 @@ function loop(dt: number)
 			targetVelocityUnit = downwardsMovementDirectionCFrame.UpVector
 		end
 		-- TODO: -=-=-=-=-=-=-=-=-= Debugging -=-=-=-=-=-=-=-=-=-=
-		-- if showVectorVisuals then
-		-- 	updateVisuals()
-		-- end
+		if showVectorVisuals then
+			updateVisuals()
+		end
 
 		--drawPoints()
 		--drawMultiplier()
